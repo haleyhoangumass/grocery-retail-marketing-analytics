@@ -96,20 +96,6 @@ This demonstrates how ranking-based targeting improves ROI without increasing ma
 The real value of analytics lies not in complex models,
 but in **turning messy customer behavior into clear prioritization and executable decisions**.
 
----
-
-## 📁 Repository Structure
-├── data/
-│ └── customer_data.csv
-├── notebooks/
-│ ├── 01_eda.R
-│ ├── 02_segmentation.R
-│ └── 03_predictive_modeling.R
-├── visuals/
-│ └── charts/
-├── report/
-│ └── final_report.pdf
-└── README.md
 
 ---
 
