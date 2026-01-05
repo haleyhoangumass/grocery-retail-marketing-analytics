@@ -1,0 +1,890 @@
+---
+title: "690M Final Project Group 3"
+author: "Haley Hoang, Keerthana Katragadda, Elsie Uwera"
+date: "2025-10-04"
+output:
+  html_document: default
+  pdf_document: default
+---
+A. Part 1 - EDA
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+##load packages
+library(tidyverse)
+library(ggcorrplot)
+library(ggplot2)
+library(scales) 
+```
+
+```{r}
+##Load Grocery Store data
+store.df <- read.csv("~/Downloads/Grocery Store Marketing Data.csv")
+```
+
+```{r}
+##Let's take a look at our data
+str(store.df)
+summary(store.df)
+head(store.df)
+```
+
+```{r}
+#Check the target variable Response
+str(store.df$Response)
+table(store.df$Response, useNA = "ifany")
+```
+
+```{r}
+##Create new interpretable features for later analysis
+store.df <- store.df %>%
+  mutate(
+    children    = Kidhome + Teenhome, # total kids in household
+    total_spend = MntWines + MntFruits + MntMeatProducts + MntFishProducts + MntSweetProducts, # total kids in household
+    channel_pref = case_when(
+      pmax(NumStorePurchases, NumCatalogPurchases, NumWebPurchases, na.rm = TRUE) == NumStorePurchases ~ "Store", #case_when() to check conditions in order and assigns a value depending on which condition is true. pmax() returns the maximum value across these three columns for each row (each customer)
+      pmax(NumStorePurchases, NumCatalogPurchases, NumWebPurchases, na.rm = TRUE) == NumWebPurchases   ~ "Web", 
+      TRUE ~ "Catalog"
+    ) # preferred channel = the channel with the highest purchase count
+  )
+```
+
+```{r}
+##Quick table with key numbers
+overview <- store.df %>%
+  summarise(
+    median_income  = median(Income, na.rm = TRUE), # robust central tendency. na.rm = TRUE to ignore any missing values (NA) during a calculation 
+    avg_total_spend= mean(total_spend, na.rm = TRUE),
+    response_rate  = mean(Response == 1, na.rm = TRUE) # overall % Response = Yes
+  )
+overview
+```
+
+```{r}
+##Checking for missing values
+colSums(is.na(store.df))
+```
+We have 24 entries that are missing the income variable. 
+
+```{r}
+##We are going to impute those missing values with the median income
+store.df$Income[is.na(store.df$Income)] <- median(store.df$Income, na.rm = TRUE)
+colSums(is.na(store.df ))
+```
+
+
+```{r}
+##Overall response rate to show the baseline response rate clearly
+ggplot(store.df, aes(x = factor(Response), fill = factor(Response))) +
+  geom_bar(show.legend = FALSE) +
+  geom_text(stat = "count", # counts each response level automatically
+            aes(label = scales::percent(after_stat(count / sum(count)), accuracy = 0.1)), # adds percent labels computed from the counts inside the stat
+            vjust = -0.4, size = 4) +
+  labs(title = "Overall Campaign Response Rate", 
+       x = "Response (0 = No, 1 = Yes)",
+       y = "Percentage of Customers") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_minimal()
+```
+
+
+
+```{r}
+##Let's look at 2 key categorical varibables' distributions
+
+##Education
+ggplot(store.df, aes(x = Education)) + 
+  geom_bar(fill = "cadetblue") +
+  theme_minimal()
+
+
+##Marital Status
+ggplot(store.df, aes(x = Marital_Status)) + 
+  geom_bar(fill = "darkorange") +
+  theme_minimal()
+
+```
+
+```{r}
+##Looking deeper at the categorical variables compared to our target variable "Response"
+
+#Response vs Education
+ggplot(store.df, aes(x = Response, fill = Education)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Proportion of Responses by Educational Attainment",
+    x = "Response",
+    y = "Proportion of Customers",
+    fill = "Education"
+  ) +
+  scale_y_continuous(labels = scales::percent) +
+  theme_minimal()
+
+#Response vs Marital Status
+ggplot(store.df, aes(x = Response, fill = Marital_Status)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Proportion of Responses by Marital Status",
+    x = "Response",
+    y = "Proportion of Customers",
+    fill = "Marital Status"
+  ) +
+  scale_y_continuous(labels = scales::percent) +
+  theme_minimal()
+```
+
+#Now let's look at the relationship of some key numeric variables with our taregt variable using scatterplots
+```{r}
+#Income vs Response
+store.df %>%
+  ggplot(aes(x = factor(Response), y = Income, fill = factor(Response))) +
+  geom_boxplot() +
+  labs(x = "Response", y = "Income") +
+  theme_minimal()
+
+#Recency vs Response
+store.df %>%
+  ggplot(aes(x = factor(Response), y = Recency, fill = factor(Response))) +
+  geom_boxplot() +
+  labs(x = "Response", y = "Recency") +
+  theme_minimal()
+
+#Number of Web Visits vs Response
+store.df %>%
+  ggplot(aes(x = factor(Response), y = NumWebVisitsMonth, fill = factor(Response))) +
+  geom_boxplot() +
+  labs(x = "Response", y = "Number of Web Visits") +
+  theme_minimal()
+
+#Number of Store Purchases vs Response
+store.df %>%
+  ggplot(aes(x = factor(Response), y = NumStorePurchases, fill = factor(Response))) +
+  geom_boxplot() +
+  labs(x = "Response", y = "Number of Store Purchases") +
+  theme_minimal()
+
+#Number of Deal Purchases vs Response
+store.df %>%
+  ggplot(aes(x = factor(Response), y = NumDealsPurchases, fill = factor(Response))) +
+  geom_boxplot() +
+  labs(x = "Response", y = "Number of Deal Purchases") +
+  theme_minimal()
+
+#Amount Spent on Wines vs Response
+store.df %>%
+  ggplot(aes(x = factor(Response), y = MntWines, fill = factor(Response))) +
+  geom_boxplot() +
+  labs(x = "Response", y = "Wine Amount") +
+  theme_minimal()
+
+#Amount Spent on Meat vs Response
+store.df %>%
+  ggplot(aes(x = factor(Response), y = MntMeatProducts, fill = factor(Response))) +
+  geom_boxplot() +
+  labs(x = "Response", y = "Meat Amount") +
+  theme_minimal()
+
+#Amount Spent on Premium Products vs Response
+store.df %>%
+  ggplot(aes(x = factor(Response), y = MntGoldProds, fill = factor(Response))) +
+  geom_boxplot() +
+  labs(x = "Response", y = "Premium Products Amount") +
+  theme_minimal()
+
+#Children vs Response
+ggplot(store.df, aes(x = factor(Response), y = children, fill = factor(Response))) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(title = "Children vs Response",
+       x = "Response (0 = No, 1 = Yes)",
+       y = "Number of Children")
+```
+# Let's use the selected numeric columns to visualize their relationship using a correlation matrix
+```{r}
+corr <- round(cor(store.df[ ,c("Income","Recency","NumWebVisitsMonth","NumStorePurchases","NumDealsPurchases","MntWines","MntMeatProducts","MntGoldProds", "children")]), 2)
+
+ggcorrplot(corr, lab = TRUE, title = "Correlation Heatmap")
+```
+
+#Product Category Analysis
+```{r}
+#Which is the strongest product category?
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+cat_summary <- store.df %>%
+  select(MntWines, MntMeatProducts, MntFishProducts,
+         MntSweetProducts, MntFruits) %>%
+  pivot_longer(cols = everything(),
+               names_to = "category",
+               values_to = "spend") %>%
+  group_by(category) %>%
+  summarise(
+    mean_spend   = mean(spend, na.rm = TRUE),
+    median_spend = median(spend, na.rm = TRUE),
+    sd_spend     = sd(spend, na.rm = TRUE)
+  )
+cat_summary
+```
+
+```{r}
+#Visualize the mean & median spending by bar chart
+cat_summary_long <- cat_summary %>%
+  select(category, mean_spend, median_spend) %>%
+  pivot_longer(cols = c(mean_spend, median_spend),
+               names_to = "stat",
+               values_to = "value")
+
+ggplot(cat_summary_long,
+       aes(x = category, y = value, fill = stat)) +
+  geom_col(position = "dodge") +
+  labs(title = "Mean vs Median Spend by Category",
+       x = "Product Category",
+       y = "Spend") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+Wine has highest mean and median, which indicates that it is the strongest premium product category
+
+```{r}
+#Whether the observed difference in wine spending is statistically significant rather than due to random variation 
+t.test(MntWines ~ Response, data = store.df)
+t.test(MntMeatProducts ~ Response, data = store.df)
+t.test(MntGoldProds ~ Response, data = store.df)
+```
+With p-value < 2.2e-16, wine has the largest and most statistically significant gap between responders and non-responders (269.1044 vs 502.7036)
+=> Responders buy LOTS of wine => premium lifestyle behavior => ideal target for niche campaigns.
+=> Wine is the best behavioral predictor of campaign success.
+
+#Channel Preference Analysis
+
+```{r}
+#Why Channel Preference Analysis? Is channel preference associated with Response? 
+tbl <- table(store.df$channel_pref, store.df$Response)
+chisq.test(tbl)
+```
+The chi-square test indicates a statistically significant association between channel preference and campaign response (χ²(2) = 83.51, p < 0.001). Customers differ systematically in their likelihood of responding based on their preferred shopping channel.
+
+```{r}
+##Channel preference analysis
+channel_summary <- store.df %>%
+  group_by(channel_pref) %>%
+  summarise(
+    customers  = n(),
+    avg_spend  = mean(total_spend, na.rm = TRUE),
+    web_visits = mean(NumWebVisitsMonth, na.rm = TRUE),
+    resp_rate  = mean(Response == 1, na.rm = TRUE)
+  ) %>%
+  arrange(desc(avg_spend))
+
+channel_summary # This is the executive summary: size and quality of each preferred-channel group
+
+ggplot(channel_summary, aes(x = channel_pref, y = avg_spend, fill = channel_pref)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Spending by Channel",
+       x = "Preferred Channel",
+       y = "Average Total Spend") +
+  theme_minimal()
+```
+Response rates are not evenly distributed across channels: catalog-preferring customers respond the most, web customers respond at a moderate rate, and store-preferring customers respond the least. Channel preference is therefore a meaningful predictor for targeting decisions.
+
+#Does Recency predict response?
+```{r}
+#Test: Are responders more recent shoppers?
+t.test(Recency ~ Response, data = store.df)
+```
+The Welch t-test indicates a highly significant difference in Recency between responders and non-responders (p < 0.001). Non-responders have a higher average Recency (around 51 days) than responders (around 35 days), meaning that customers who purchased more recently are much more likely to respond to the campaign. This confirms Recency as a key behavioral predictor of response.
+_________
+
+B. Part 2 -
+###Market Segmentation:
+
+In this section, we use clustering to identify distinct customer segments based on spending behavior and demographics, then profile each group and connect it back to campaign response.
+
+##1. Prepare Data for Clustering
+We’ll use a few key numeric drivers:
+Income – economic capacity, total_spend – overall value, Recency – how recently they purchased, NumWebVisitsMonth – engagement with website, children – household size / family stage
+We also scale variables before k-means so that large-scale variables (like Income) don’t dominate the clustering.
+
+```{r}
+seg_vars <- store.df %>%
+  select(Income, total_spend, Recency, NumWebVisitsMonth, children) %>%
+  drop_na()
+```
+
+```{r}
+seg_ids <- store.df %>%
+  mutate(row_id = row_number()) %>%
+  select(row_id)
+```
+
+```{r}
+seg_scaled <- scale(seg_vars)
+summary(seg_scaled)
+```
+##2. Choose Number of Clusters (k)
+We’ll use the elbow method to pick k.
+
+```{r}
+set.seed(123)
+
+wss <- map_dbl(1:8, ~ {
+  kmeans(seg_scaled, centers = .x, nstart = 25)$tot.withinss
+})
+
+elbow_df <- tibble(
+  k   = 1:8,
+  wss = wss
+)
+
+ggplot(elbow_df, aes(x = k, y = wss)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Elbow Plot for K-Means Clustering",
+       x = "Number of Clusters (k)",
+       y = "Total Within-Cluster Sum of Squares") +
+  theme_minimal()
+```
+From the elbow plot, choose the k where the curve starts to “bend.” For illustration, we’ll proceed with 4 clusters, which typically provides a nice balance of granularity and interpretability.
+
+##3. Run K-Means and Attach Segment Labels
+
+```{r}
+set.seed(123)  # for reproducibility
+
+k <- 4
+km_fit <- kmeans(seg_scaled, centers = k, nstart = 25)
+
+# Add segment labels back to main data frame
+store.df$segment <- factor(km_fit$cluster)
+
+# Quick sanity check: how many customers per segment?
+table(store.df$segment)
+```
+
+
+
+##4. Segment Profiles: Spending, Demographics & Response
+Now we summarize each segment on key metrics, including response rate.
+
+```{r}
+segment_profile <- store.df %>%
+  group_by(segment) %>%
+  summarise(
+    customers      = n(),
+    avg_income     = mean(Income, na.rm = TRUE),
+    avg_total_spend= mean(total_spend, na.rm = TRUE),
+    avg_recency    = mean(Recency, na.rm = TRUE),
+    avg_web_visits = mean(NumWebVisitsMonth, na.rm = TRUE),
+    avg_children   = mean(children, na.rm = TRUE),
+    resp_rate      = mean(Response == 1, na.rm = TRUE)
+  ) %>%
+  arrange(desc(avg_total_spend))
+
+segment_profile
+```
+
+
+Now let's look at how channel preference varies by segment:
+
+```{r}
+segment_channel <- store.df %>%
+  group_by(segment, channel_pref) %>%
+  summarise(
+    customers = n(),
+    resp_rate = mean(Response == 1, na.rm = TRUE),
+    .groups   = "drop"
+  )
+
+segment_channel
+```
+
+Segment 1 shows strong preference for Store, with 331 customers—the majority within this segment. This indicates a group that values in-person shopping experiences, possibly driven by convenience, routine shopping habits, or preference for physically inspecting products.A smaller portion prefers Catalog (94 customers), suggesting that traditional channels still hold some relevance for them. The Web channel accounts for only 32 customers, showing low digital engagement. Segment 1 is largely composed of traditional, in-store shoppers who may be less responsive to digital marketing and more influenced by physical displays, in-store promotions, or catalog reminders. They are likely comfortable with habitual shopping patterns and prefer familiar, tangible interactions.
+
+Segment 2 has 387 customers preferring Store shopping—again the highest proportion. However, compared to Segment 1, this segment shows slightly higher digital activity with 87 Web-preferring customers. Catalog preference (34 customers) remains present but relatively small. Segment 2 is similar to Segment 1 in relying heavily on physical Store shopping, but they demonstrate somewhat greater comfort with online channels. This group may be in transition—some customers are adopting Web-based interactions while others still rely on traditional channels. Promotional strategies can be flexibly split between Store and Web for this segment.
+
+
+Segment 3 maintains the same trend with 515 Store-preferring customers, the largest store-preferring group among the segments. Their Web preference is moderate (105 customers), and Catalog preference is extremely low (only 5 customers). Segment 3 appears to be a strongly Store-centric group with a slightly higher digital footprint than Segments 1 and 2. The tiny Catalog count suggests that this group has largely abandoned traditional mail-based shopping. They may be receptive to digital promotions and in-store point-of-sale marketing, making them a prime target for omnichannel strategies that blend Store and Web channels.
+
+Segment 4 has 533 Store-preferring customers, similar in magnitude to Segment 3. Web engagement (113 customers) is the highest in absolute number among all segments. Catalog preference remains extremely small (4 customers), indicating a modernized customer base that likely prefers faster, more dynamic channels.Segment 4 demonstrates the highest digital comfort among all groups, even though Store remains dominant—likely reflecting hybrid behavior. These customers are more open to browsing or ordering online, responding to mobile notifications, emails, or Web promotions. They align well with personalized digital campaigns and website-driven promotions such as free delivery, online discounts, or product recommendations.
+
+
+##Final Segments:
+Segments 1 & 2: Traditional, Store-first shoppers
+Segment 3: Store-heavy but digitally growing
+Segment 4: Most digitally active and easiest to target online
+
+
+Now we visualize the segments by profiles:
+Average total spend by segment
+
+```{r}
+ggplot(segment_profile,
+       aes(x = segment, y = avg_total_spend, fill = segment)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Average Total Spend by Segment",
+       x = "Segment",
+       y = "Average Total Spend") +
+  theme_minimal()
+```
+
+The segmentation results reveal a strong distinction in spending behavior across the four customer groups. Segment 1 stands out as the highest-value segment, with average spending well above the other groups, indicating a cluster of customers who consistently make large purchases and likely contribute disproportionately to overall revenue. Segment 2 represents a mid-value segment, with average spending below Segment 1 but still significantly higher than the remaining segments, suggesting a solid group of shoppers with moderate purchasing power. In contrast, Segments 3 and 4 show substantially lower average spend, each falling well below the mid-tier level. These customers likely shop less frequently or purchase lower-priced items, making them lower-priority targets for high-cost or premium campaigns. Overall, the pattern highlights clear opportunities for differentiated marketing: investing in retention and premium targeting for Segment 1, growth-oriented nudges for Segment 2, and more cost-effective, engagement-building strategies for Segments 3 and 4.
+
+Response rate by segment
+
+```{r}
+ggplot(segment_profile,
+       aes(x = segment, y = resp_rate, fill = segment)) +
+  geom_col(show.legend = FALSE) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(title = "Campaign Response Rate by Segment",
+       x = "Segment",
+       y = "Response Rate") +
+  theme_minimal()
+```
+
+The response rate results reveal strong performance differences across the four customer segments. Segment 1 shows the highest response rate—nearly 30%—indicating that these customers are highly receptive to marketing outreach and represent the most promising group for future campaigns. Segment 3 also responds relatively well, with a moderate response rate around 17%, suggesting that these customers are worth targeting, especially with well-timed or personalized offers. In contrast, Segment 2 produces only a modest response rate of roughly 13%, indicating limited but still measurable engagement. Segment 4 has the lowest response rate, falling below 5%, signaling that this segment is the least responsive and may not justify heavy investment in promotional spend. Overall, these trends suggest that marketing resources should be prioritized toward Segments 1 and 3, where customer engagement is strongest and the potential return on investment is highest, while Segments 2 and 4 may require either tailored re-engagement strategies or reduced targeting intensity depending on campaign goals.
+
+Average Income by segment
+
+```{r}
+ggplot(segment_profile,
+       aes(x = segment, y = avg_income, fill = segment)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Average Income by Segment",
+       x = "Segment",
+       y = "Average Income") +
+  theme_minimal()
+```
+
+Average Monthly Web Visits by Segment
+
+```{r}
+ggplot(segment_profile,
+       aes(x = segment, y = avg_web_visits, fill = segment)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Average Monthly Web Visits by Segment",
+       x = "Segment",
+       y = "Avg Web Visits (Monthly)") +
+  theme_minimal()
+```
+
+The number of monthly web visits varies noticeably across customer segments, highlighting differences in digital engagement. Segments 3 and 4 are the most digitally active, each averaging around 6–7 web visits per month, suggesting that these customers frequently browse or interact with the company’s online platform. This makes them strong candidates for web-based promotions, personalized recommendations, and digital loyalty campaigns. Segment 2 shows moderate online activity, averaging about 5 monthly visits, indicating a group that is comfortable online but not as highly engaged as Segments 3 and 4. In contrast, Segment 1 has the lowest online engagement, with only about 2 web visits per month, implying a more traditional shopping pattern and a lower likelihood of responding to purely digital marketing efforts. These differences suggest that campaign strategy should vary by segment, with heavier digital outreach aimed at Segments 3 and 4 and more balanced or offline-focused tactics for Segment 1.
+
+Average Recency by Segment
+
+```{r}
+ggplot(segment_profile,
+       aes(x = segment, y = avg_recency, fill = segment)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Average Recency by Segment",
+       x = "Segment",
+       y = "Avg Recency (Days Since Last Purchase)") +
+  theme_minimal()
+```
+The recency analysis highlights meaningful differences in how recently customers across segments have made a purchase. Segment 3 shows the lowest recency—around 22 days—which means customers in this group shop most frequently and are the most actively engaged with the brand. Segments 1 and 2 follow closely behind with recency values just below 50 days, indicating moderately regular purchasing behavior. In contrast, Segment 4 has the highest recency at nearly 70 days, suggesting that this segment is the least active and may be drifting toward churn. These patterns indicate that Segments 1 and 3 contain more recently engaged customers who are likely to be receptive to ongoing campaigns, while Segment 4 may require reactivation strategies such as win-back offers, targeted reminders, or personalized incentives to re-engage lapsed shoppers.
+
+###Predictive Modeling: Logistic Regression
+We now build a predictive model to identify high-response customers.
+
+#Pre-processing data & Split data
+To develop a parsimonious and interpretable predictive model, we selected five key variables: total_spend, Recency, children, channel_pref, and NumWebVisitsMonth. These variables were chosen based on both statistical evidence from Part I and managerial relevance in customer response modeling.
+
+First, total_spend was included as the strongest indicator of economic value. Although specific product-level spending (e.g., wines, meat, gold products) showed meaningful differences between responders and non-responders, these categories are highly correlated with one another. Using total_spend avoids multicollinearity while still capturing overall purchasing intensity.
+
+Second, Recency captures how recently the customer made a purchase. Statistical testing confirmed that responders shop significantly more recently than non-responders. Recency is one of the most established predictors of direct marketing success and summarizes purchase activity better than multiple frequency variables.
+
+Third, children represents household size, which materially influences basket composition and campaign responsiveness. The engineered variable combining Kidhome and Teenhome provides a cleaner and more interpretable demographic signal compared to using each component separately.
+
+Fourth, channel_pref (Store, Web, or Catalog) was included because chi-square analysis revealed a strong association between channel preference and campaign response. This variable captures behavioral differences in how customers interact with the retailer, adding a qualitative dimension that complements the numeric predictors.
+
+Finally, NumWebVisitsMonth was retained to account for browsing intensity. Our exploratory analysis showed that heavy website visitors tend to browse frequently but do not necessarily convert, making this a valuable indicator of “low-intent” behavior that helps distinguish likely responders from non-responders.
+
+Together, these five variables form a balanced set of predictors that are behaviorally meaningful, statistically non-redundant, and highly relevant for identifying customers most likely to respond to future campaigns.
+```{r}
+# Modeling setup: train / test split
+
+set.seed(123)
+
+## Recode Response from 0/1 to No/Yes and make it a factor
+
+store.df$Response <- ifelse(store.df$Response == 1, "Yes", "No")
+store.df$Response <- factor(store.df$Response, levels = c("No", "Yes"))
+
+# Check distribution
+table(store.df$Response)
+
+# chọn một số biến hành vi & giá trị đã tạo
+model.df <- store.df %>%
+  select(Response,
+         total_spend,
+         Recency,
+         children,
+         channel_pref,
+         NumWebVisitsMonth)
+
+# train-test split 70/30
+idx   <- sample(seq_len(nrow(model.df)), size = 0.7 * nrow(model.df))
+train <- model.df[idx, ]
+test  <- model.df[-idx, ]
+
+# Check factor levels again
+table(train$Response)
+table(train$channel_pref)
+
+
+```
+
+
+```{r}
+#Fit logistic regression model
+
+logit1 <- glm(Response ~ total_spend +
+                            Recency +
+                            children +
+                            channel_pref +
+                            NumWebVisitsMonth,
+              data   = train,
+              family = binomial)
+
+summary(logit1)
+```
+- total_spend (Estimate = +0.00146, p < 2e-16)
+Strong positive and significant predictor.
+For every additional dollar spent on products historically, the log-odds of responding increase.
+=> Higher-spending customers are much more likely to respond to marketing campaigns.
+
+- Recency (Estimate = –0.026, p < 2e-16)
+Negative and highly significant.
+Recency = days since last purchase → higher value = “more inactive”.
+=> Inactive customers respond less. The more recent their last purchase, the higher the likelihood of responding.
+
+- children (Estimate = –0.48, p = 0.00059)
+Negative and significant.
+Each additional child reduces the probability of responding.
+=> Families with more children are less likely to engage, possibly due to budget constraints or different purchase priorities.
+
+- channel_prefStore (Estimate = –0.87, p = 0.000883)
+Baseline: Catalog customers
+Store customers have much lower response probability than Catalog customers.
+=> Catalog shoppers are the best responders. Store shoppers are significantly less likely to react to mailed/online campaigns.
+
+- channel_prefWeb (Estimate = –0.09, p = 0.769)
+NOT significant (p > 0.05)
+=> Web-preferred customers respond similarly to Catalog customers — no statistically detectable difference.
+
+- NumWebVisitsMonth (Estimate = +0.2056, p = 4e-08)
+Positive and highly significant.
+Each additional monthly website visit increases the odds of responding.
+=> High website engagement strongly predicts responsiveness.
+
+```{r}
+## Odds ratios
+exp(coef(logit1))
+```
+- total_spend:	For every aditional $100 in total spend, odds of customer responding to the campaign would be multiplied by by 1.0015^100 holding other variables constant
+- Recency:	Every +10 days recency ↓ odds by ~23%
+- children:	Each additional child ↓ odds by 38%
+- channel_prefStore:	Store shoppers are 59% less likely to respond than catalog shoppers
+- NumWebVisitsMonth:	Each additional web visit ↑ odds by 22.8%
+
+```{r}
+library(pROC)
+
+# predicted probabilities on test set
+test$pred_prob <- predict(logit1, newdata = test, type = "response")
+
+# ROC & AUC
+roc_obj <- roc(test$Response, test$pred_prob)
+auc(roc_obj)
+
+plot(roc_obj, main = "ROC Curve – Logistic Regression")
+```
+With AUC = 0.73 > 0.5, the logistic model works well, reasonably separates responders from non-responders and is suitable for campaign targeting.
+
+## Decile Lift Chart Analysis
+```{r}
+# Load required packages ---------------------------------------------------
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+# Step 1: Make sure you have the decile table (run this if you haven't already)
+test_decile <- test %>%
+  mutate(
+    resp_numeric = ifelse(Response == "Yes", 1, 0),           # 1 = responded, 0 = not
+    decile = ntile(-pred_prob, 10)                           # Decile 1 = top 10% highest predicted probability
+  )
+
+# Step 2: Calculate baseline (overall) response rate
+baseline_resp <- mean(test_decile$resp_numeric)
+
+# Step 3: Build the decile analysis table with lift
+decile_table <- test_decile %>%
+  group_by(decile) %>%
+  summarise(
+    customers   = n(),
+    responders  = sum(resp_numeric),
+    resp_rate   = mean(resp_numeric),
+    .groups = "drop"
+  ) %>%
+  arrange(decile) %>%
+  mutate(
+    lift = resp_rate / baseline_resp                          # This is the key metric for the chart
+  )
+
+# Step 4: Plot the Decile Lift Bar Chart (exactly like your example)
+ggplot(decile_table, aes(x = factor(decile), y = lift)) +
+  geom_col(fill = "#4A7BB7", width = 0.75, alpha = 0.9) +       # Corporate blue bars
+  geom_text(aes(label = round(lift, 2)),                       # Show lift value on top of each bar
+            vjust = -0.6, size = 4.5, fontface = "bold", color = "black") +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red", size = 0.9) +
+  annotate("text", x = 8, y = 1.15, 
+           label = "Random Model (Lift = 1.0)", 
+           color = "red", size = 4.2, fontface = "italic") +
+  scale_y_continuous(
+    name = "Decile / Global Mean",                             # Exact label from your chart
+    breaks = seq(0, ceiling(max(decile_table$lift) + 0.5), by = 0.2),
+    limits = c(0, max(decile_table$lift) * 1.15),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  scale_x_discrete(name = "Decile") +
+  labs(
+    title = "Decile Lift Chart",
+    subtitle = "Decile 1 = 10% of customers with highest predicted response probability",
+    caption = "Higher lift = better model separation"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 18, hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, color = "gray50"),
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(size = 12),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.caption = element_text(color = "gray60", size = 10)
+  )
+
+```
+Since top 4 deciles are above 1, I select the top 40% of customers (i.e., Deciles 1 to 4) as the campaign targeting group and automatically find the exact probability cutoff that corresponds to the top 40% ranked by predicted probability.
+
+## Find the probability cutoff for targeting the TOP 40%
+```{r}
+# Step 1: Rank all customers in the test set by predicted probability (descending)
+test_ranked <- test %>%
+  arrange(desc(pred_prob)) %>%                     # Highest probability first
+  mutate(rank = row_number()) %>%                  # Rank 1 = highest score
+  mutate(pct_of_total = rank / n())                # Cumulative % of customers
+
+# Step 2: Find the customer at exactly the 40th percentile (top 40%)
+# We use <= 0.40 to include the customer who pushes us over 40%
+cutoff_customer <- test_ranked %>%
+  filter(pct_of_total <= 0.40) %>%
+  slice_tail(n = 1)                                # Get the last (lowest-scoring) customer in top 40%
+
+# Step 3: Extract the actual probability cutoff
+recommended_cutoff <- round(cutoff_customer$pred_prob, 4)
+
+# Step 4: Show key results
+cat("=== RECOMMENDED CAMPAIGN CUTOFF FOR TOP 40% ===\n")
+cat(sprintf("Target: Top 40%% of customers (Deciles 1–4)\n"))
+cat(sprintf("Number of customers to contact: %d out of %d (%.1f%%)\n",
+            nrow(filter(test_ranked, pct_of_total <= 0.40)),
+            nrow(test_ranked),
+            40))
+cat(sprintf("Probability cutoff (include if pred_prob >= %.4f)\n", recommended_cutoff))
+cat(sprintf("Customers with pred_prob >= %.4f will be targeted\n", recommended_cutoff))
+baseline_test <- mean(test$Response == "Yes")
+cat(sprintf("Baseline response rate on test set: %.2f%%\n", baseline_test * 100))
+
+# Optional: Create a clean summary table
+target_summary <- test_ranked %>%
+  mutate(target_group = ifelse(pred_prob >= recommended_cutoff, "Targeted (Top 40%)", "Not Targeted")) %>%
+  group_by(target_group) %>%
+  summarise(
+    Customers = n(),
+    Responders = sum(Response == "Yes"),
+    Response_Rate = mean(Response == "Yes"),
+    `%_of_Total_Customers` = n() / nrow(test) * 100,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    `%_of_Total_Responders` = Responders / sum(Responders) * 100,
+    Response_Rate           = percent(Response_Rate, accuracy = 0.01),
+    `%_of_Total_Customers`  = round(`%_of_Total_Customers`, 1),
+    `%_of_Total_Responders` = round(`%_of_Total_Responders`, 1)
+  ) %>%
+  select(target_group, Customers, Responders, Response_Rate, 
+         `%_of_Total_Customers`, `%_of_Total_Responders`)
+
+print(target_summary)
+```
+# CONFUSION MATRIX + METRICS WITH CUSTOM CUTOFF = 0.1340
+```{r}
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+# 1. Tạo dự đoán theo cutoff mới
+cutoff <- 0.1340
+pred_class <- ifelse(test$pred_prob >= cutoff, "Yes", "No")
+actual     <- test$Response
+
+# 2. Tính Confusion Matrix thủ công
+TP <- sum(pred_class == "Yes" & actual == "Yes")   # True Positive
+TN <- sum(pred_class == "No"  & actual == "No")    # True Negative
+FP <- sum(pred_class == "Yes" & actual == "No")    # False Positive
+FN <- sum(pred_class == "No"  & actual == "Yes")   # False Negative
+
+# 3. Tính các chỉ số
+Accuracy    <- (TP + TN) / (TP + TN + FP + FN)
+Sensitivity <- TP / (TP + FN)        # Recall
+Specificity <- TN / (TN + FP)
+Precision   <- TP / (TP + FP)
+F1          <- 2 * Precision * Sensitivity / (Precision + Sensitivity)
+
+# 4. In kết quả đẹp
+cat("=== CONFUSION MATRIX (Cutoff ≥ 0.1340) ===\n")
+cat(sprintf("           Actual\n"))
+cat(sprintf("Predicted   No    Yes\n"))
+cat(sprintf("   No      %3d    %3d\n", TN, FN))
+cat(sprintf("   Yes     %3d    %3d\n\n", FP, TP))
+
+cat("=== PERFORMANCE METRICS ===\n")
+metrics <- data.frame(
+  Metric = c("Accuracy", "Sensitivity (Recall)", "Specificity", "Precision", "F1-Score"),
+  Value  = c(Accuracy, Sensitivity, Specificity, Precision, F1)
+) %>%
+  mutate(Value = percent(Value, accuracy = 0.1))
+
+print(metrics)
+
+# 5. Vẽ Confusion Matrix đẹp
+cm_data <- data.frame(
+  Predicted = c("No", "No", "Yes", "Yes"),
+  Actual    = c("No", "Yes", "No", "Yes"),
+  Count     = c(TN, FN, FP, TP)
+)
+
+ggplot(cm_data, aes(x = Predicted, y = Actual)) +
+  geom_tile(aes(fill = Count), color = "white", size = 1) +
+  geom_text(aes(label = Count), color = "white", size = 10, fontface = "bold") +
+  scale_fill_gradient(low = "#2c7bb6", high = "#d7191c") +
+  labs(title = "Confusion Matrix – Top 40% Targeting (Cutoff ≥ 0.1340)",
+       subtitle = paste0("TP = ", TP, "  (captured ", percent(Sensitivity, 0.1), " of all responders)"),
+       x = "Predicted Response", y = "Actual Response") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5, color = "gray40"))
+```
+
+
+✔️ Interpretation
+- Model is good at detecting non-responders
+- Model is moderately good at detecting responders
+- For marketing, this is acceptable because: Missing a potential responder (false negative) is usually worse than sending to a non-responder.
+- Thus choosing a low cutoff (0.2) is correct — it increases sensitivity.
+
+✔️ Final Business Interpretation Summary
+- Top Positive Predictors (Who is likely to respond?)
++ High spenders
++ Recent shoppers
++ Frequent website visitors
+
+- Top Negative Predictors (Low responders)
++ Customers with many children
++ Store-preferred shoppers
++ Highly inactive customers
+
+=> Best Target Segment based on Model : High-spend + catalog or web-engaged shoppers who recently purchased.
+
+_________
+
+c. Part 3 -
+###Strategy & Recommendations
+
+Drawing on insights from exploratory data analysis, behavioral segmentation, and predictive modeling, we propose a data-driven marketing strategy to increase campaign effectiveness, improve targeting accuracy, and optimize marketing spend. These recommendations are rooted in statistical findings and customer patterns identified throughout the analysis. 
+
+#1. Prioritize High-Value, High-Response Customer Segments
+The segmentation results reveal that Segment 1 is both the highest spender and the strongest responder, with an average spend above $1,200 and a response rate near 30%, far exceeding the overall dataset average. Segment 3 also demonstrates meaningful responsiveness (~17%) and lower recency (22 days), marking them as active and engaged shoppers.
+
+Recommendation:
+- Make Segments 1 and 3 the primary audience for future campaigns.
+- Invest more heavily in direct targeting (email, catalog, web retargeting) to these segments, as they show the highest ROI potential.
+- Offer loyalty incentives, premium product bundles, and personalized promotions to retain and upsell these high-performing customer groups.
+
+#2. Tailor Marketing Channels to Each Segment’s Behavioral Profile
+Our EDA and segmentation analysis show meaningful differences in digital activity and channel preference across segments.
+- Segments 3 & 4: Highest digital engagement (6–7 monthly web visits).
+- Segments 1 & 2: Store-dominant with far lower digital activity (2–5 visits).
+- Chi-square tests confirm that channel preference is strongly associated with response behavior (p < 0.001).
+
+Recommendation:
+- Digital-heavy strategy for Segments 3 & 4:
+  - Personalized email recommendations
+  - App notifications
+  - Web-exclusive deals
+  - Retargeting ads
+Store-forward strategy for Segments 1 & 2:
+  - In-store coupons
+  - Register-triggered offers
+  - Physical mailers (especially for Segment 1)
+  - Shelf displays promoting high-margin categories like wines
+  
+Aligning messages with channel behavior will significantly increase likelihood of engagement.
+
+#3. Develop Targeted Offers Based on Product Spending Insights
+Product analysis shows that wine spending has the strongest association with campaign response—responders spend almost double on wine compared to non-responders, with a significant t-test result (p < 2.2e-16).
+
+Recommendation:
+- Create premium wine campaigns, featuring bundle discounts or early access to new wines.
+- Use “high spenders in premium categories” as a micro-segment for future targeted promotions.
+- Consider cross-selling opportunities with other premium categories (meat, gold products) to increase basket size.
+
+This strategy makes use of customers’ established behavior and leverages the strongest predictive category in the dataset.
+
+#4. Use Predictive Modeling to Score and Prioritize Customers
+Our logistic regression model demonstrates strong discriminatory power (AUC = 0.73), making it a reliable tool for campaign targeting. The model identifies the following as top positive predictors of response:
+- Total spend (higher = more likely to respond)
+- Recent purchases (lower recency = more likely)
+- Web engagement (more visits = higher likelihood)
+
+Negative predictors include:
+- Children in household
+- Store-preferring customers
+- High recency (inactivity)
+
+Recommendation:
+- Use predicted probabilities to create ranked customer lists for campaign rollout.
+- Prioritize customers with high spend, low recency, and strong digital engagement.
+- Apply more aggressive communication to top-probability customers (e.g., deeper discounts, personalized product recommendations).
+- For low-probability customers, deploy low-cost or automated marketing touches to conserve budget.
+
+This aligns targeting efforts with statistical evidence and improves efficiency.
+
+#5. Implement Reactivation Campaigns for At-Risk Segments
+Segment 4, despite strong digital engagement, has the highest recency (~70 days) and lowest response rate (below 5%). This indicates a group that is browsing but not buying—possibly disengaged or price-sensitive.
+
+Recommendation:
+- Use win-back incentives such as:
+  - Free delivery thresholds
+  - Personalized product reminders
+  - Time-limited discounts
+- Trigger these campaigns when recency exceeds 45–60 days.
+
+These efforts target at-risk customers before they churn entirely.
+
+#6. Create Family-Focused, Budget-Sensitive Promotions
+EDA and predictive modeling show that customers with more children are significantly less likely to respond (p < 0.001). This group may be more budget-constrained or purchase staples rather than premium items.
+
+Recommendation:
+- Promote family bundles, discount multipacks, and essentials-oriented promotions for customers with large households.
+- Offer loyalty rewards based on essentials (e.g., snacks, fruit, cleaning items) instead of premium categories.
+
+This aligns outreach with the needs and constraints of this demographic group.
+
+
